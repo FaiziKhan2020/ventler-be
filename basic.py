@@ -11,8 +11,9 @@ from openai_rewrite import gpt_rewrite
 
 #Supabase Configuration
 config = dotenv_values(".env")
-url = "https://tsmvewvgfvsbvuwblfkm.supabase.co"
-key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzbXZld3ZnZnZzYnZ1d2JsZmttIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY4ODgxNjgyNCwiZXhwIjoyMDA0MzkyODI0fQ.nVtHkVdbjRVUFRENTzx96-W9BJlBgKk7acuDPXrjEqc"
+url = config["SUPABASE_PROJECT_URL"]
+key =config["SUPABASE_SECRET_KEY"]
+openai_key = config["OPEN_AI_KEY"]
 supa: Client = create_client(url, key)
 
 
