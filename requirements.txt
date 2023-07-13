@@ -5,3 +5,4 @@ supabase
 newspaper3k
 nltk
 openai
+gunicorn

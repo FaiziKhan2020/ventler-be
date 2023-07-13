@@ -9,7 +9,7 @@ def fetchArtcile(fetchUrl):
 
     article.download()
     article.parse()
-    # nltk.download('punkt')
+    nltk.download('punkt')
     article.nlp()
     article.config.keep_article_html = True
 
