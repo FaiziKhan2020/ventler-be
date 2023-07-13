@@ -52,7 +52,7 @@ async def generateContent(request: Annotated[dict, Body()]):
     if url:
         article = fetchArtcile(url)
         print(f"\nArticle HTML: {article.doc} {article.article_html}")
-        rewrite = await gpt_rewrite(article.title,article.text, article.summary)
+        rewrite = await gpt_rewrite(article.title,article.text, article.summary, openai_key)
         return {"content": rewrite}
     else:
         return {"content": ""}
