@@ -1,4 +1,5 @@
 import json
+import os
 from fastapi import (Body, Depends, FastAPI, HTTPException,
                      Request)
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,10 +11,10 @@ from articles import fetchArtcile
 from openai_rewrite import gpt_rewrite
 
 #Supabase Configuration
-config = dotenv_values(".env")
-url = config["SUPABASE_PROJECT_URL"]
-key =config["SUPABASE_SECRET_KEY"]
-openai_key = config["OPEN_AI_KEY"]
+# config = dotenv_values(".env")
+url = os.getenv("SUPABASE_PROJECT_URL","")
+key = os.getenv("SUPABASE_SECRET_KEY","")
+openai_key = os.getenv("OPEN_AI_KEY","")
 supa: Client = create_client(url, key)
 
 
