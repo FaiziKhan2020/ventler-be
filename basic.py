@@ -10,7 +10,6 @@ from typing import Annotated
 from supabase import Client, create_client
 from articles import fetchArtcile
 from openai_rewrite import gpt_rewrite
-from apscheduler.schedulers.background import BackgroundScheduler
 from asyncio import Semaphore
 from wordpress import upload_to_wordpress
 
