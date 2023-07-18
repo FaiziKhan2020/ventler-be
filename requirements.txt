@@ -6,3 +6,4 @@ newspaper3k
 nltk
 openai
 gunicorn
+asyncio

@@ -1,14 +1,18 @@
 import json
 import os
+import asyncio
 from fastapi import (Body, Depends, FastAPI, HTTPException,
                      Request)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import Annotated
-from dotenv import dotenv_values
+# from dotenv import dotenv_values
 from supabase import Client, create_client
 from articles import fetchArtcile
 from openai_rewrite import gpt_rewrite
+from apscheduler.schedulers.background import BackgroundScheduler
+from asyncio import Semaphore
+from wordpress import upload_to_wordpress
 
 #Supabase Configuration
 # config = dotenv_values(".env")
@@ -17,7 +21,7 @@ key = os.getenv("SUPABASE_SECRET_KEY","")
 openai_key = os.getenv("OPEN_AI_KEY","")
 supa: Client = create_client(url, key)
 
-
+semaphore = Semaphore(1)
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -56,3 +60,115 @@ async def generateContent(request: Annotated[dict, Body()]):
         return {"content": rewrite}
     else:
         return {"content": ""}
+
+@app.post("/add_wpress")
+async def addWordpressSite(request: Annotated[dict, Body()]):
+    siteName = request['title']
+    url = request['url']
+    creds = request['creds']
+    inputPrompt = request['prompt']
+    # add in to the supabase table
+    try:
+        supa.table("config").insert({
+            "credential_name": "wordpress",
+            "credential_value": creds,
+            "wordpress_site": siteName,
+            "wordpress_url": url,
+            "user_prompt": inputPrompt,
+            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
+        }).execute()
+        return {"message": "Record created successfully!"}
+    except err:
+        return err
+    
+
+@app.post("/openai_creds")
+async def setOpenAiCreds(request: Annotated[dict, Body()]):
+    creds = request["openai_creds"]
+    try:
+        supa.table("config").upsert({
+            "credential_name": "open_ai",
+            "credential_value": creds,
+            "wordpress_site": "",
+            "wordpress_url": "",
+            "user_prompt": "",
+            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
+        }).execute()
+        return {"message": "Record created successfully!"}
+    except err:
+        return err
+    
+@app.get("/configs")
+async def getConfigs():
+    try:
+        data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").execute()
+        return {"configs": data }
+    except err:
+        return err
+    
+@app.post("/insert_queue")
+async def insertToQueue(request: Annotated[dict, Body()]):
+    title = request["title"]
+    url = request["url"]
+    wordpress_url = request["wpress_url"]
+    site = request["site"]
+    try:
+        supa.table("process").insert({
+            "title": title,
+            "article_url": url,
+            "wordpress_url": wordpress_url,
+            "wordpress_site": site,
+            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb",
+            "status": "In Queue"
+        }).execute()
+    except err:
+        return 
+    
+@app.get("/get_queue")
+async def getQueue():
+    try:
+        data = supa.table("process").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").execute()
+        return {"queue": data}
+    except err:
+        return 'Error occurred'
+    
+# Here you create the function do you want to schedule
+     
+@app.get("/do")
+async def process_loop():
+    async with semaphore:
+        #call the processing here
+        await generate_articles()
+        asyncio.create_task(process_loop())
+        return True
+    
+async def generate_articles():
+    #Fetch In Queue articles
+    in_queue_articles = supa.table("process").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("status","In Queue").execute()
+    if len(in_queue_articles.data) > 0:
+        article = in_queue_articles.data[0]
+        try:
+            print(f"Article {article}")
+            supa.table("process").update({
+                "status": "Processing"
+                }).eq("id",article["id"]).execute()
+            #set the article to processing
+            #now first scrape the article url to extract details
+            scrapped_article = fetchArtcile(article["article_url"])
+            user_configs_data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("credential_name","open_ai").execute()
+            if user_configs_data.data["credential_value"] is None:
+                raise Exception("OpenAI credentials are missing!")
+            #now do the magic with open ai to get the final regeneration
+            final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data["credential_value"], scrapped_article.images)
+            wp_config_data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("wordpress_url",article["wordpress_url"]).execute()
+            if len(wp_config_data.data) == 0:
+                raise Exception("No wordpress URL is present")
+            wp_config = wp_config_data.data
+            await upload_to_wordpress(final_article_data["title"],final_article_data["article"],wp_config["wordpress_url"],wp_config["credential_value"],wp_config["wordpress_user"])
+            print('Done!')
+        except Exception as err:
+            error_message = str(err)
+            supa.table("process").update({
+                "status": "Failed",
+                "error": error_message
+            }).eq("id",article["id"]).execute()
