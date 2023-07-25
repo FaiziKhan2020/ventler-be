@@ -1,18 +1,25 @@
 import requests
 import json
 
-async def upload_to_wordpress(title, payload, url, creds, username):
+async def upload_to_wordpress(title, payload,slug, url, creds, username):
     #process payload here
+    print("ddddd")
     try:
+        print("I am uploading")
         data = {
             'title':title,
             'content': payload,
-            'status': 'draft'
+            'status': 'published',
+            'slug': slug
         }
-        response = requests.post(f"{url}wp-json/wp/v2/posts", auth=(username, creds), json=data)
+        if url[len(url)-1] == '/':
+            url = url[:-1]
+        fin_url = url+"/wp-json/wp/v2/posts"
+        response = requests.post(fin_url, auth=(username, creds), json=data)
         if response.status_code != 201:
             raise Exception("Post not published")
         print("uploaded")
         return true
     except Exception as err:
+        print("Err")
         return str(err)

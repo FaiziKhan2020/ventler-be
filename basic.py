@@ -114,6 +114,12 @@ async def insertToQueue(request: Annotated[dict, Body()]):
     url = request["url"]
     wordpress_url = request["wordpress_url"]
     site = request["site"]
+    length = request["length"]
+    tone = request["tone"]
+    language = request["language"]
+    headings = request["headings"]
+    main_prompt = request["main_prompt"]
+    auto_upload = request["auto_upload"]
     try:
         supa.table("process").insert({
             "title": title,
@@ -121,7 +127,13 @@ async def insertToQueue(request: Annotated[dict, Body()]):
             "wordpress_url": wordpress_url,
             "wordpress_site": site,
             "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb",
-            "status": "In Queue"
+            "status": "In Queue",
+            "length" : length,
+            "tone" : tone,
+            "language" : language,
+            "headings" : headings,
+            "main_prompt" : main_prompt,
+            "auto_upload" : auto_upload
         }).execute()
     except Exception as err:
         return err
@@ -135,6 +147,22 @@ async def regenerate(request: Annotated[dict, Body()]):
             }).eq("id",id).execute()
         return {"status": "Regeneration started!"}
     except Exception as err:
+        return err
+@app.post("/upload")
+async def uploadToWp(request: Annotated[dict, Body()]):
+    id = request["item_id"]
+    try:
+        data = supa.table("process").select("*").eq("id",id).execute()
+        article = data.data[0]
+        wp_config_data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("wordpress_url",article["wordpress_url"]).execute()
+        wp_config = wp_config_data.data
+        if len(wp_config) == 0:
+            raise Exception("No wordpress URL is present")
+        # do the upload
+        await upload_to_wordpress("test title here",article["output_html"],"a-test-slug-here",wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
+        return {"status": "Regeneration started!"}
+    except Exception as err:
+        print("in error ", err)
         return err
     
     
@@ -178,7 +206,11 @@ async def generate_articles():
                 raise Exception("OpenAI credentials are missing!")
             #now do the magic with open ai to get the final regeneration
             print('444')
-            final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,list(scrapped_article.images), stable_diff_key=stable_diff_key)
+            tone = "normal" if article["tone"] is None or article["tone"]=="" else article["tone"]
+            heads = "5" if article["headings"] is None or article["headings"] =="" else article["headings"]
+            lngth = "very long" if article["length"] is None or article["length"] =="" else article["length"]
+            mprompt = None if article["main_prompt"] is None or article["main_prompt"] =="" else article["main_prompt"]
+            final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,list(scrapped_article.images), stable_diff_key=stable_diff_key, language=article["language"],tone=tone,headings=heads,main_prompt=mprompt)
             print('555')
             #push the output to supabase
             supa.table("process").update({
@@ -190,9 +222,14 @@ async def generate_articles():
                 raise Exception("No wordpress URL is present")
             print('777')
             wp_config = wp_config_data.data
-            print('999')
-            await upload_to_wordpress(final_article_data["title"],final_article_data["article"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
+            print('999 ',article["auto_upload"])
+            if article["auto_upload"] == True or article["auto_upload"] == "TRUE":
+                await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
             print('Done!')
+            supa.table("process").update({
+                "status": "Done",
+                "error": error_message
+            }).eq("id",article["id"]).execute()
         except Exception as err:
             error_message = str(err)
             supa.table("process").update({
