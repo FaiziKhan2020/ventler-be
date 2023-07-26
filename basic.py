@@ -227,8 +227,7 @@ async def generate_articles():
                 await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
             print('Done!')
             supa.table("process").update({
-                "status": "Done",
-                "error": error_message
+                "status": "Done"
             }).eq("id",article["id"]).execute()
         except Exception as err:
             error_message = str(err)
