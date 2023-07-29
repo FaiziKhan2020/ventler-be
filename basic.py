@@ -83,6 +83,38 @@ async def addWordpressSite(request: Annotated[dict, Body()]):
     except err:
         return err
     
+@app.post("/prompt_settings")
+async def addWordpressSite(request: Annotated[dict, Body()]):
+    base_prompt = request['base_prompt']
+    body_prompt = request['body_prompt']
+    title_prompt = request['title_prompt']
+    slug_prompt = request['slug_prompt']
+    headings_prompt = request['headings_prompt']
+    conclusion_prompt = request['conclusion_prompt']
+    total_headings = request['total_headings']
+    default_language = request['default_language']
+    default_tone = request['default_tone']
+    length = request['length']
+    # add in to the supabase table
+    try:
+        supa.table("config").update({
+            "credential_name": "prompt_settings",
+            "base_prompt" : base_prompt,
+            "title_prompt" : title_prompt,
+            "slug_prompt" : slug_prompt,
+            "headings_prompt" : headings_prompt,
+            "conclusion_prompt" : conclusion_prompt,
+            "total_headings" : total_headings,
+            "default_language" : default_language,
+            "tone" : default_tone,
+            "length" : length,
+            "body_prompt" : body_prompt,
+            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
+        }).eq("credential_name","prompt_settings").execute()
+        return {"message": "Record created successfully!"}
+    except err:
+        return err
+    
 
 @app.post("/openai_creds")
 async def setOpenAiCreds(request: Annotated[dict, Body()]):
@@ -110,16 +142,17 @@ async def getConfigs():
     
 @app.post("/insert_queue")
 async def insertToQueue(request: Annotated[dict, Body()]):
-    title = request["title"]
-    url = request["url"]
-    wordpress_url = request["wordpress_url"]
-    site = request["site"]
-    length = request["length"]
-    tone = request["tone"]
-    language = request["language"]
-    headings = request["headings"]
-    main_prompt = request["main_prompt"]
-    auto_upload = request["auto_upload"]
+    title = request["title"] if request["title"] is not None else ""
+    url = request["url"] if request["url"] is not None else "" 
+    wordpress_url = request["wordpress_url"] if request["wordpress_url"] is not None else "" 
+    site = request["site"] if request["site"] is not None else "" 
+    length = request["length"] if request["length"] is not None else None 
+    tone = request["tone"] if request["tone"] is not None else None
+    language = request["language"] if request["language"] is not None else None
+    headings = request["headings"] if request["headings"] is not None else None
+    main_prompt = request["main_prompt"] if request["main_prompt"] is not None else ""
+    auto_upload = request["auto_upload"] if request["auto_upload"] is not None else True 
+    author = None if request["author"] is None else request["author"]
     try:
         supa.table("process").insert({
             "title": title,
@@ -133,8 +166,12 @@ async def insertToQueue(request: Annotated[dict, Body()]):
             "language" : language,
             "headings" : headings,
             "main_prompt" : main_prompt,
-            "auto_upload" : auto_upload
+            "auto_upload" : auto_upload,
+            "author": author
         }).execute()
+        supa.table("config").update({
+                "user_prompt": main_prompt
+            }).eq("wordpress_url",wordpress_url).execute()
     except Exception as err:
         return err
 @app.post("/regen")
@@ -159,7 +196,7 @@ async def uploadToWp(request: Annotated[dict, Body()]):
         if len(wp_config) == 0:
             raise Exception("No wordpress URL is present")
         # do the upload
-        await upload_to_wordpress("test title here",article["output_html"],"a-test-slug-here",wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
+        await upload_to_wordpress(article["article_title"],article["output_html"],"a-test-slug-here",wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
         return {"status": "Regeneration started!"}
     except Exception as err:
         print("in error ", err)
@@ -206,15 +243,21 @@ async def generate_articles():
                 raise Exception("OpenAI credentials are missing!")
             #now do the magic with open ai to get the final regeneration
             print('444')
-            tone = "normal" if article["tone"] is None or article["tone"]=="" else article["tone"]
-            heads = "5" if article["headings"] is None or article["headings"] =="" else article["headings"]
-            lngth = "very long" if article["length"] is None or article["length"] =="" else article["length"]
+            #get the main settings
+            main_config_data = supa.table("config").select("*").eq("credential_name","prompt_settings").execute()
+            main_config = main_config_data.data[0]
+            print("Mcn: ", main_config)
+            tone = main_config["tone"] if article["tone"] is None or article["tone"]=="" else article["tone"]
+            heads = main_config["total_headings"] if article["headings"] is None or article["headings"] =="" else article["headings"]
+            lngth = main_config["length"] if article["length"] is None or article["length"] =="" else article["length"]
             mprompt = None if article["main_prompt"] is None or article["main_prompt"] =="" else article["main_prompt"]
-            final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,list(scrapped_article.images), stable_diff_key=stable_diff_key, language=article["language"],tone=tone,headings=heads,main_prompt=mprompt)
+            final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,list(scrapped_article.images), stable_diff_key=stable_diff_key, language=article["language"],tone=tone,headings=heads,main_prompt=mprompt,body_prompt=main_config["body_prompt"],title_prompt=main_config["title_prompt"], length=lngth,conclusion_prompt=main_config["conclusion_prompt"],headings_prompt=main_config["headings_prompt"],prd_base_prompt=main_config["base_prompt"],slug_prompt=main_config["slug_prompt"])
             print('555')
             #push the output to supabase
             supa.table("process").update({
-                "output_html": final_article_data["article"]
+                "output_html": final_article_data["article"],
+                "slug": final_article_data["slug"],
+                "article_title": final_article_data["article_title"]
             }).eq("id",article["id"]).execute()
             wp_config_data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("wordpress_url",article["wordpress_url"]).execute()
             print('666')
@@ -223,8 +266,8 @@ async def generate_articles():
             print('777')
             wp_config = wp_config_data.data
             print('999 ',article["auto_upload"])
-            if article["auto_upload"] == True or article["auto_upload"] == "TRUE":
-                await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
+            if article["auto_upload"] == "True" or bool(article["auto_upload"]) is True:
+                await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"],None if article["author"] is None or article["author"] == "" else article["author"])
             print('Done!')
             supa.table("process").update({
                 "status": "Done"
