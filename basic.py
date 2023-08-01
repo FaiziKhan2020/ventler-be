@@ -68,6 +68,7 @@ async def addWordpressSite(request: Annotated[dict, Body()]):
     user = request['user']
     creds = request['creds']
     inputPrompt = request['prompt']
+    categories = request['categories']
     # add in to the supabase table
     try:
         supa.table("config").insert({
@@ -77,14 +78,51 @@ async def addWordpressSite(request: Annotated[dict, Body()]):
             "wordpress_url": url,
             "user_prompt": inputPrompt,
             "wordpress_user": user,
+            "categories": categories,
             "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
         }).execute()
         return {"message": "Record created successfully!"}
     except err:
         return err
     
+@app.post("/update_wpress")
+async def updateWordpressSite(request: Annotated[dict, Body()]):
+    id = request['id']
+    siteName = request['title']
+    url = request['url']
+    user = request['user']
+    creds = request['creds']
+    inputPrompt = request['prompt']
+    categories = request['categories']
+    # add in to the supabase table
+    try:
+        supa.table("config").update({
+            "credential_name": "wordpress",
+            "credential_value": creds,
+            "wordpress_site": siteName,
+            "wordpress_url": url,
+            "user_prompt": inputPrompt,
+            "wordpress_user": user,
+            "categories": categories,
+            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
+        }).eq("id",id).execute()
+        return {"message": "Record created successfully!"}
+    except err:
+        return err
+@app.post("/delete_wpress")
+async def deleteWordpressSite(request: Annotated[dict, Body()]):
+    id = request['id']
+    # add in to the supabase table
+    try:
+        config = supa.table("config").select("*").eq("id",id).execute()
+        supa.table("config").delete("*").eq("id",id).execute()
+        supa.table("process").delete("*").eq("wordpress_url",config.data[0]['wordpress_url']).execute()
+        return {"message": "Record deleted successfully!"}
+    except err:
+        return err
+    
 @app.post("/prompt_settings")
-async def addWordpressSite(request: Annotated[dict, Body()]):
+async def promptSettings(request: Annotated[dict, Body()]):
     base_prompt = request['base_prompt']
     body_prompt = request['body_prompt']
     title_prompt = request['title_prompt']
@@ -153,6 +191,7 @@ async def insertToQueue(request: Annotated[dict, Body()]):
     main_prompt = request["main_prompt"] if request["main_prompt"] is not None else ""
     auto_upload = request["auto_upload"] if request["auto_upload"] is not None else True 
     author = None if request["author"] is None else request["author"]
+    category = None if request["category"] is None else request["category"]
     try:
         supa.table("process").insert({
             "title": title,
@@ -167,10 +206,18 @@ async def insertToQueue(request: Annotated[dict, Body()]):
             "headings" : headings,
             "main_prompt" : main_prompt,
             "auto_upload" : auto_upload,
-            "author": author
+            "author": author,
+            "category": category,
         }).execute()
         supa.table("config").update({
-                "user_prompt": main_prompt
+                "user_prompt": main_prompt,
+                "default_category": category,
+                "auto_upload": auto_upload,
+                "length" : length,
+                "tone" : tone,
+                "default_language" : language,
+                "total_headings" : headings,
+                "author": author,
             }).eq("wordpress_url",wordpress_url).execute()
     except Exception as err:
         return err
@@ -196,7 +243,10 @@ async def uploadToWp(request: Annotated[dict, Body()]):
         if len(wp_config) == 0:
             raise Exception("No wordpress URL is present")
         # do the upload
-        await upload_to_wordpress(article["article_title"],article["output_html"],"a-test-slug-here",wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
+        url = await upload_to_wordpress(article["article_title"],article["output_html"],article["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
+        supa.table("process").update({
+            "post_url": url
+        }).eq("id",id).execute()
         return {"status": "Regeneration started!"}
     except Exception as err:
         print("in error ", err)
@@ -267,7 +317,10 @@ async def generate_articles():
             wp_config = wp_config_data.data
             print('999 ',article["auto_upload"])
             if article["auto_upload"] == "True" or bool(article["auto_upload"]) is True:
-                await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"],None if article["author"] is None or article["author"] == "" else article["author"])
+                url = await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"],None if article["author"] is None or article["author"] == "" else article["author"])
+                supa.table("process").update({
+                "post_url": url
+                }).eq("id",article["id"]).execute()
             print('Done!')
             supa.table("process").update({
                 "status": "Done"

@@ -24,15 +24,13 @@ async def upload_to_wordpress(title, payload,slug, url, creds, username, author=
         if authorId is not None:
             data["author"] = authorId
         
-        print("pr: ",data)
+        
         fin_url = url+"/wp-json/wp/v2/posts"
-        print(fin_url)
         response = requests.post(fin_url, auth=(username, creds), json=data)
-        print(response.status_code)
         if response.status_code != 201:
             raise Exception("Post not published")
-        print("uploaded")
-        return True
+        print("uploaded at: ", response.json().get('guid').get('rendered'))
+        return response.json().get('guid').get('rendered')
     except Exception as err:
         print("Err")
         return str(err)
