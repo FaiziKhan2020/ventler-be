@@ -115,8 +115,8 @@ async def deleteWordpressSite(request: Annotated[dict, Body()]):
     # add in to the supabase table
     try:
         config = supa.table("config").select("*").eq("id",id).execute()
-        supa.table("config").delete("*").eq("id",id).execute()
-        supa.table("process").delete("*").eq("wordpress_url",config.data[0]['wordpress_url']).execute()
+        supa.table("config").delete().eq("id",id).execute()
+        supa.table("process").delete().eq("wordpress_url",config.data[0]['wordpress_url']).execute()
         return {"message": "Record deleted successfully!"}
     except err:
         return err
@@ -317,7 +317,7 @@ async def generate_articles():
             wp_config = wp_config_data.data
             print('999 ',article["auto_upload"])
             if article["auto_upload"] == "True" or bool(article["auto_upload"]) is True:
-                url = await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"],None if article["author"] is None or article["author"] == "" else article["author"])
+                url = await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"],None if article["author"] is None or article["author"] == "" else article["author"],None if article["default_category"] is None or article["default_category"] == "" else article["default_category"])
                 supa.table("process").update({
                 "post_url": url
                 }).eq("id",article["id"]).execute()
