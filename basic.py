@@ -158,7 +158,7 @@ async def promptSettings(request: Annotated[dict, Body()]):
 async def setOpenAiCreds(request: Annotated[dict, Body()]):
     creds = request["openai_creds"]
     try:
-        supa.table("config").upsert({
+        supa.table("config").update({
             "credential_name": "open_ai",
             "credential_value": creds,
             "wordpress_site": "",
