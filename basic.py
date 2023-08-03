@@ -165,7 +165,7 @@ async def setOpenAiCreds(request: Annotated[dict, Body()]):
             "wordpress_url": "",
             "user_prompt": "",
             "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
-        }).execute()
+        }).eq("credential_name","open_ai").execute()
         return {"message": "Record created successfully!"}
     except err:
         return err
