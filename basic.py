@@ -305,8 +305,8 @@ async def generate_articles():
             heads = main_config["total_headings"] if article["headings"] is None or article["headings"] =="" else article["headings"]
             lngth = main_config["length"] if article["length"] is None or article["length"] =="" else article["length"]
             mprompt = None if article["main_prompt"] is None or article["main_prompt"] =="" else article["main_prompt"]
-            imgprompt = None if article["image_prompt"] is None or article["image_prompt"] =="" else article["image_prompt"]
-            headImgprompt = None if article["heading_image_prompt"] is None or article["heading_image_prompt"] =="" else article["heading_image_prompt"]
+            imgprompt = None if main_config["image_prompt"] is None or main_config["image_prompt"] =="" else main_config["image_prompt"]
+            headImgprompt = None if main_config["heading_image_prompt"] is None or main_config["heading_image_prompt"] =="" else main_config["heading_image_prompt"]
             final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,list(scrapped_article.images), stable_diff_key=stable_diff_key, language=article["language"],tone=tone,headings=heads,main_prompt=mprompt,body_prompt=main_config["body_prompt"],title_prompt=main_config["title_prompt"], length=lngth,conclusion_prompt=main_config["conclusion_prompt"],headings_prompt=main_config["headings_prompt"],prd_base_prompt=main_config["base_prompt"],slug_prompt=main_config["slug_prompt"],image_prompt=imgprompt,heading_image_prompt=headImgprompt)
             print('555')
             #push the output to supabase
