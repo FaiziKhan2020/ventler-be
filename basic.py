@@ -134,6 +134,7 @@ async def promptSettings(request: Annotated[dict, Body()]):
     default_language = request['default_language']
     default_tone = request['default_tone']
     length = request['length']
+    heading_image_prompt = request['heading_image_prompt']
     # add in to the supabase table
     try:
         supa.table("config").update({
@@ -149,6 +150,7 @@ async def promptSettings(request: Annotated[dict, Body()]):
             "tone" : default_tone,
             "length" : length,
             "body_prompt" : body_prompt,
+            "heading_image_prompt": heading_image_prompt,
             "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
         }).eq("credential_name","prompt_settings").execute()
         return {"message": "Record created successfully!"}
@@ -304,7 +306,8 @@ async def generate_articles():
             lngth = main_config["length"] if article["length"] is None or article["length"] =="" else article["length"]
             mprompt = None if article["main_prompt"] is None or article["main_prompt"] =="" else article["main_prompt"]
             imgprompt = None if article["image_prompt"] is None or article["image_prompt"] =="" else article["image_prompt"]
-            final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,list(scrapped_article.images), stable_diff_key=stable_diff_key, language=article["language"],tone=tone,headings=heads,main_prompt=mprompt,body_prompt=main_config["body_prompt"],title_prompt=main_config["title_prompt"], length=lngth,conclusion_prompt=main_config["conclusion_prompt"],headings_prompt=main_config["headings_prompt"],prd_base_prompt=main_config["base_prompt"],slug_prompt=main_config["slug_prompt"],image_prompt=imgprompt)
+            headImgprompt = None if article["heading_image_prompt"] is None or article["heading_image_prompt"] =="" else article["heading_image_prompt"]
+            final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,list(scrapped_article.images), stable_diff_key=stable_diff_key, language=article["language"],tone=tone,headings=heads,main_prompt=mprompt,body_prompt=main_config["body_prompt"],title_prompt=main_config["title_prompt"], length=lngth,conclusion_prompt=main_config["conclusion_prompt"],headings_prompt=main_config["headings_prompt"],prd_base_prompt=main_config["base_prompt"],slug_prompt=main_config["slug_prompt"],image_prompt=imgprompt,heading_image_prompt=headImgprompt)
             print('555')
             #push the output to supabase
             supa.table("process").update({
