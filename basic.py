@@ -277,6 +277,7 @@ async def process_loop():
     
 async def generate_articles():
     #Fetch In Queue articles
+    # await asyncio.sleep(900)
     in_queue_articles = supa.table("process").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("status","In Queue").execute()
     if len(in_queue_articles.data) > 0:
         article = in_queue_articles.data[0]
@@ -313,7 +314,7 @@ async def generate_articles():
             supa.table("process").update({
                 "output_html": final_article_data["article"],
                 "slug": final_article_data["slug"],
-                "article_title": final_article_data["article_title"]
+                "article_title": final_article_data["title"]
             }).eq("id",article["id"]).execute()
             wp_config_data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("wordpress_url",article["wordpress_url"]).execute()
             print('666')
