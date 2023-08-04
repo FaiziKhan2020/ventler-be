@@ -277,7 +277,7 @@ async def process_loop():
     
 async def generate_articles():
     #Fetch In Queue articles
-    # await asyncio.sleep(900)
+    await asyncio.sleep(300)
     in_queue_articles = supa.table("process").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("status","In Queue").execute()
     if len(in_queue_articles.data) > 0:
         article = in_queue_articles.data[0]

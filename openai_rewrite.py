@@ -1,6 +1,7 @@
 import openai
 import requests
 import json
+import asyncio
 
 async def gpt_rewrite(title,text,summary, openai_key, user_prompt = None, images = [], stable_diff_key = "", language="English",tone="normal",headings=5,length="very long",main_prompt=None, prd_base_prompt=None,slug_prompt=None,title_prompt=None,conclusion_prompt=None,body_prompt=None,headings_prompt=None, image_prompt=None,heading_image_prompt=None):
     openai.api_key = openai_key
@@ -58,6 +59,7 @@ async def gpt_rewrite(title,text,summary, openai_key, user_prompt = None, images
     sub_headings_arrays = json.loads(output.choices[0].message.content)
     print("B777")
     count = 1
+    await asyncio.sleep(60)
     for sub_heads in sub_headings_arrays:
         bdy_prompt = f"For the sub heading {sub_heads} write 3 very long and detailed paragraph in {language} and return response as valid html format" if body_prompt is None else body_prompt
         chatmessages.append({"role":"user","content":bdy_prompt})
@@ -73,6 +75,7 @@ async def gpt_rewrite(title,text,summary, openai_key, user_prompt = None, images
             count=count+1
     #generate conclusion 
     print("B999")
+    await asyncio.sleep(60)
     cnc_prompt = f"Check this summary of the article: {summary} write a very long and detailed conclusion paragraph in {language} and return response as valid html format" if conclusion_prompt is None else f"Check this summary of the article: {summary} " + conclusion_prompt
     chatmessages.append({"role":"user","content":cnc_prompt})
     output = await openai.ChatCompletion.acreate(model="gpt-4",messages=chatmessages)
