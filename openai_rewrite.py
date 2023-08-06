@@ -65,7 +65,7 @@ async def gpt_rewrite(title,text,summary, openai_key, user_prompt = None, images
         chatmessages.append({"role":"user","content":bdy_prompt})
         output = await openai.ChatCompletion.acreate(model="gpt-4",messages=chatmessages)
         chatmessages.append(output.choices[0].message)
-        final_article = final_article + f"<h2> {sub_heads} </h2> </br>" + output.choices[0].message.content
+        final_article = final_article + output.choices[0].message.content
         print("B888")
         if len(images) >= count + 1:
             #then there exist image for headings
