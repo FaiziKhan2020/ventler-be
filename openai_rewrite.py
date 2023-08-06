@@ -61,7 +61,7 @@ async def gpt_rewrite(title,text,summary, openai_key, user_prompt = None, images
     count = 1
     await asyncio.sleep(60)
     for sub_heads in sub_headings_arrays:
-        bdy_prompt = f"For the sub heading {sub_heads} write 3 very long and detailed paragraph in {language} and return response as valid html format" if body_prompt is None else body_prompt
+        bdy_prompt = f"For the sub heading {sub_heads} write 3 very long and detailed paragraph in {language} and return response as valid html format" if body_prompt is None else str(body_prompt).replace("{subhead}",sub_heads)
         chatmessages.append({"role":"user","content":bdy_prompt})
         output = await openai.ChatCompletion.acreate(model="gpt-4",messages=chatmessages)
         chatmessages.append(output.choices[0].message)
