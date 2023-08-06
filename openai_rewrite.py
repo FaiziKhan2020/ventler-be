@@ -29,7 +29,7 @@ async def gpt_rewrite(title,text,summary, openai_key, user_prompt = None, images
     output = await openai.ChatCompletion.acreate(model="gpt-4",messages=chatmessages)
     print('B222')
     chatmessages.append(output.choices[0].message)
-    final_article = final_article + output.choices[0].message.content
+    final_article = final_article + "<h1>" + output.choices[0].message.content + "</h1> </br> </br>"
     print('B333')
     regen_title = output.choices[0].message.content
     print("B4444")
@@ -119,7 +119,7 @@ async def gen_image_from_image(prompt,image_url,key):
         'Content-Type': 'application/json'
         }
 
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = await requests.request("POST", url, headers=headers, data=payload)
         return "" if len(response.json().get("image_links")) > 0 else response.json().get("image_links")[0]
     except Exception as err:
         return ""
@@ -148,7 +148,7 @@ async def gen_image_from_prompt(prompt,key):
         'Content-Type': 'application/json'
         }
 
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = await requests.request("POST", url, headers=headers, data=payload)
         return "" if len(response.json().get("image_links")) > 0 else response.json().get("image_links")[0]
     except Exception as err:
         return ""
