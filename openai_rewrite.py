@@ -90,7 +90,7 @@ async def gpt_rewrite(title,text,summary, openai_key, user_prompt = None, images
     print("B101010")
     if len(images) > count:
         #then there exist image for conclusion
-        sub_heading_image = gen_image_from_image(img_prmpt, images[count],stable_diff_key)
+        sub_heading_image = await gen_image_from_image(img_prmpt, images[count],stable_diff_key)
         if sub_heading_image is not None:
             final_article = final_article + f"</br> <img src='{sub_heading_image}'/>"
     print("B11910910")
