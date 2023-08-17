@@ -19,6 +19,7 @@ url = os.getenv("SUPABASE_PROJECT_URL","")
 key = os.getenv("SUPABASE_SECRET_KEY","")
 stable_diff_key = os.getenv("STABLE_DIFFUSION_KEY","")
 openai_key = os.getenv("OPEN_AI_KEY","")
+user_id = os.getenv("SUPABASE_USER_ID","")
 supa: Client = create_client(url, key)
 
 semaphore = Semaphore(1)
@@ -79,7 +80,7 @@ async def addWordpressSite(request: Annotated[dict, Body()]):
             "user_prompt": inputPrompt,
             "wordpress_user": user,
             "categories": categories,
-            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
+            "user_id": user_id
         }).execute()
         return {"message": "Record created successfully!"}
     except err:
@@ -104,7 +105,7 @@ async def updateWordpressSite(request: Annotated[dict, Body()]):
             "user_prompt": inputPrompt,
             "wordpress_user": user,
             "categories": categories,
-            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
+            "user_id": user_id
         }).eq("id",id).execute()
         return {"message": "Record created successfully!"}
     except err:
@@ -135,6 +136,8 @@ async def promptSettings(request: Annotated[dict, Body()]):
     default_tone = request['default_tone']
     length = request['length']
     heading_image_prompt = request['heading_image_prompt']
+    product_blog_prompt = request['product_blog_prompt']
+    referral_id = request['referral_id']
     # add in to the supabase table
     try:
         supa.table("config").update({
@@ -150,8 +153,10 @@ async def promptSettings(request: Annotated[dict, Body()]):
             "tone" : default_tone,
             "length" : length,
             "body_prompt" : body_prompt,
+            "product_blog_prompt": product_blog_prompt,
+            "referral_id": referral_id,
             "heading_image_prompt": heading_image_prompt,
-            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
+            "user_id": user_id
         }).eq("credential_name","prompt_settings").execute()
         return {"message": "Record created successfully!"}
     except err:
@@ -168,7 +173,7 @@ async def setOpenAiCreds(request: Annotated[dict, Body()]):
             "wordpress_site": "",
             "wordpress_url": "",
             "user_prompt": "",
-            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb"
+            "user_id": user_id
         }).eq("credential_name","open_ai").execute()
         return {"message": "Record created successfully!"}
     except err:
@@ -177,7 +182,7 @@ async def setOpenAiCreds(request: Annotated[dict, Body()]):
 @app.get("/configs")
 async def getConfigs():
     try:
-        data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").execute()
+        data = supa.table("config").select("*").eq(user_id).execute()
         return {"configs": data }
     except err:
         return err
@@ -196,13 +201,15 @@ async def insertToQueue(request: Annotated[dict, Body()]):
     auto_upload = request["auto_upload"] if request["auto_upload"] is not None else True 
     author = None if request["author"] is None else request["author"]
     category = None if request["category"] is None else request["category"]
+    product_blog = False if request["product_blog"] is None else request["product_blog"]
+    product_image_url = None if request["product_image_url"] is None else request["product_image_url"]
     try:
         supa.table("process").insert({
             "title": title,
             "article_url": url,
             "wordpress_url": wordpress_url,
             "wordpress_site": site,
-            "user_id": "65da9556-ecb2-4f9c-8553-db66d6159ccb",
+            "user_id": user_id,
             "status": "In Queue",
             "length" : length,
             "tone" : tone,
@@ -210,6 +217,8 @@ async def insertToQueue(request: Annotated[dict, Body()]):
             "headings" : headings,
             "main_prompt" : main_prompt,
             "auto_upload" : auto_upload,
+            "product_blog" : product_blog,
+            "product_image_url": product_image_url,
             "author": author,
             "category": category,
         }).execute()
@@ -242,12 +251,12 @@ async def uploadToWp(request: Annotated[dict, Body()]):
     try:
         data = supa.table("process").select("*").eq("id",id).execute()
         article = data.data[0]
-        wp_config_data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("wordpress_url",article["wordpress_url"]).execute()
+        wp_config_data = supa.table("config").select("*").eq("user_id",user_id).eq("wordpress_url",article["wordpress_url"]).execute()
         wp_config = wp_config_data.data
         if len(wp_config) == 0:
             raise Exception("No wordpress URL is present")
         # do the upload
-        url = await upload_to_wordpress(article["article_title"],article["output_html"],article["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"])
+        url = await upload_to_wordpress(article["article_title"],article["output_html"],article["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"],author=article["author"],category=article["category"],preview_image_link=article["preview_image_url"])
         supa.table("process").update({
             "post_url": url
         }).eq("id",id).execute()
@@ -260,7 +269,7 @@ async def uploadToWp(request: Annotated[dict, Body()]):
 @app.get("/get_queue")
 async def getQueue():
     try:
-        data = supa.table("process").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").execute()
+        data = supa.table("process").select("*").eq("user_id",user_id).execute()
         return {"queue": data}
     except err:
         return 'Error occurred'
@@ -278,57 +287,58 @@ async def process_loop():
 async def generate_articles():
     #Fetch In Queue articles
     # await asyncio.sleep(300)
-    in_queue_articles = supa.table("process").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("status","In Queue").execute()
+    in_queue_articles = supa.table("process").select("*").eq("user_id",user_id).eq("status","In Queue").execute()
     if len(in_queue_articles.data) > 0:
         article = in_queue_articles.data[0]
         try:
-            print(f"Article {article}")
+            
             supa.table("process").update({
                 "status": "Processing"
                 }).eq("id",article["id"]).execute()
             #set the article to processing
             #now first scrape the article url to extract details
-            print('111')
-            scrapped_article = fetchArtcile(article["article_url"])
-            print('222')
-            user_configs_data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("credential_name","open_ai").execute()
-            print('333')
-            print(user_configs_data.data[0])
+            
+            scrapped_article = None
+            if article["product_blog"] == "False" or article["product_blog"] == "false": 
+                scrapped_article = fetchArtcile(article["article_url"])
+            
+            
+            user_configs_data = supa.table("config").select("*").eq("user_id",user_id).eq("credential_name","open_ai").execute()
+            
             if user_configs_data.data[0]["credential_value"] is None:
                 raise Exception("OpenAI credentials are missing!")
             #now do the magic with open ai to get the final regeneration
-            print('444')
+            
             #get the main settings
             main_config_data = supa.table("config").select("*").eq("credential_name","prompt_settings").execute()
             main_config = main_config_data.data[0]
-            print("Mcn: ", main_config)
+            
             tone = main_config["tone"] if article["tone"] is None or article["tone"]=="" else article["tone"]
             heads = main_config["total_headings"] if article["headings"] is None or article["headings"] =="" else article["headings"]
             lngth = main_config["length"] if article["length"] is None or article["length"] =="" else article["length"]
             mprompt = None if article["main_prompt"] is None or article["main_prompt"] =="" else article["main_prompt"]
+            is_product_blog = True if str(article["product_blog"]) == "True" or str(article["product_blog"]) == "true" else False
+            product_blog_prompt = None if main_config["product_blog_prompt"] is None or main_config["product_blog_prompt"] =="" else main_config["product_blog_prompt"]
+            user_referral_id = None if main_config["referral_id"] is None or main_config["referral_id"] =="" else main_config["referral_id"]
             imgprompt = None if main_config["image_prompt"] is None or main_config["image_prompt"] =="" else main_config["image_prompt"]
             headImgprompt = None if main_config["heading_image_prompt"] is None or main_config["heading_image_prompt"] =="" else main_config["heading_image_prompt"]
-            final_article_data = await gpt_rewrite(scrapped_article.title,scrapped_article.text, scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,list(scrapped_article.images), stable_diff_key=stable_diff_key, language=article["language"],tone=tone,headings=heads,main_prompt=mprompt,body_prompt=main_config["body_prompt"],title_prompt=main_config["title_prompt"], length=lngth,conclusion_prompt=main_config["conclusion_prompt"],headings_prompt=main_config["headings_prompt"],prd_base_prompt=main_config["base_prompt"],slug_prompt=main_config["slug_prompt"],image_prompt=imgprompt,heading_image_prompt=headImgprompt)
-            print('555')
+            final_article_data = await gpt_rewrite("" if scrapped_article is None else scrapped_article.title, "" if scrapped_article is None else scrapped_article.text,"" if scrapped_article is None else scrapped_article.summary, user_configs_data.data[0]["credential_value"],user_configs_data.data[0]["user_prompt"] ,[] if scrapped_article is None else list(scrapped_article.images), stable_diff_key=stable_diff_key, language=article["language"],tone=tone,headings=heads,main_prompt=mprompt,body_prompt=main_config["body_prompt"],title_prompt=main_config["title_prompt"], length=lngth,conclusion_prompt=main_config["conclusion_prompt"],headings_prompt=main_config["headings_prompt"],prd_base_prompt=main_config["base_prompt"],slug_prompt=main_config["slug_prompt"],image_prompt=imgprompt,heading_image_prompt=headImgprompt,product_blog=is_product_blog,product_prompt=product_blog_prompt,referral_id=user_referral_id,product_link=article["article_url"],product_image_link=article["product_image_url"])
             #push the output to supabase
             supa.table("process").update({
                 "output_html": final_article_data["article"],
                 "slug": final_article_data["slug"],
-                "article_title": final_article_data["title"]
+                "article_title": final_article_data["title"],
+                "preview_image_url": final_article_data["image"]
             }).eq("id",article["id"]).execute()
-            wp_config_data = supa.table("config").select("*").eq("user_id","65da9556-ecb2-4f9c-8553-db66d6159ccb").eq("wordpress_url",article["wordpress_url"]).execute()
-            print('666')
+            wp_config_data = supa.table("config").select("*").eq("user_id",user_id).eq("wordpress_url",article["wordpress_url"]).execute()
             if len(wp_config_data.data) == 0:
                 raise Exception("No wordpress URL is present")
-            print('777')
             wp_config = wp_config_data.data
-            print('999 ',article["auto_upload"])
-            if article["auto_upload"] == "True" or bool(article["auto_upload"]) is True:
-                url = await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"],None if article["author"] is None or article["author"] == "" else article["author"],None if wp_config[0]["default_category"] is None or wp_config[0]["default_category"] == "" else wp_config[0]["default_category"])
+            if str(article["auto_upload"]) == "True" or str(article["auto_upload"]) == "true":
+                url = await upload_to_wordpress(final_article_data["title"],final_article_data["article"],final_article_data["slug"],wp_config[0]["wordpress_url"],wp_config[0]["credential_value"],wp_config[0]["wordpress_user"],None if article["author"] is None or article["author"] == "" else article["author"],None if wp_config[0]["default_category"] is None or wp_config[0]["default_category"] == "" else wp_config[0]["default_category"],preview_image_link=final_article_data["image"])
                 supa.table("process").update({
                 "post_url": url
                 }).eq("id",article["id"]).execute()
-            print('Done!')
             supa.table("process").update({
                 "status": "Done"
             }).eq("id",article["id"]).execute()
